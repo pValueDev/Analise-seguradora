@@ -1,0 +1,313 @@
+---
+title: "Análise Exploratória de Dados de Seguros"
+author: "Antonio Victor Santos Freire"
+date: "today"
+lang: pt-BR
+format:
+  html:
+    toc: true
+    number-sections: true
+    embed-resources: true # gera html "independente"/completo.
+    include-before-body: cabecalho.html # inserindo imagem acima do título
+execute:
+  echo: true # false -> para esconder o código.
+  warning: false
+  message: false
+---
+
+![](Img/analise_de_dados.png){width="90%"}
+
+# Introdução
+
+O presente trabalho tem como objetivo realizar uma análise exploratória de uma base de dados de seguros, contemplando procedimentos de preparação dos dados, identificação de valores faltantes, transformação de variáveis qualitativas, construção de tabelas descritivas e comparativas e elaboração de representações gráficas para identificação de padrões relevantes.
+
+A análise exploratória constitui uma etapa fundamental em estudos estatísticos, permitindo compreender a estrutura dos dados, identificar possíveis inconsistências e gerar evidências para análises futuras.
+
+# Instalação e carregamento dos Pacotes
+
+Para evitar alguns erros ao decorrer das análises, fazer estes procedimentos nas linhas iniciais do código se torna bastante crucial.
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(tibble)
+library(gtsummary)
+library(flextable)
+library(officer)
+```
+
+# Importação e Verificação da Base
+
+A base de dados foi importada utilizando o ambiente RStudio e convertida para o formato tibble, estrutura amplamente utilizada no ecossistema tidyverse.
+
+```{r}
+dados <- read.csv(
+  "insurance_claims.csv"
+)
+
+class(dados)
+
+dim(dados)
+```
+
+A função `dim()` permite verificar o número de observações e variáveis presentes no conjunto de dados.
+
+# Identificação de Valores Faltantes
+
+Valores faltantes podem influenciar análises estatísticas e devem ser identificados previamente.
+
+```{r}
+sum(is.na(dados))
+```
+
+Foram identificados valores ausentes registrados como `NA`. Embora sua presença não inviabilize a análise exploratória, esses registros devem ser considerados em etapas posteriores de modelagem estatística.
+
+# Transformação das Variáveis Qualitativas
+
+Inicialmente foi realizada uma inspeção da estrutura da base.
+
+```{r}
+str(dados)
+```
+
+Em seguida, as variáveis qualitativas foram convertidas para o formato fator.
+
+```{r}
+dados <- dados %>%
+  mutate(across(where(is.character), as.factor))
+
+str(dados)
+```
+
+A utilização da função `across()` permitiu automatizar o processo de conversão das variáveis categóricas.
+
+# Tabela Descritiva e Comparativa
+
+Para a construção da tabela descritiva foram removidas algumas variáveis identificadoras ou incompatíveis com as estatísticas utilizadas.
+
+A variável `severidade_incidente` foi utilizada como fator de agrupamento.
+
+Para as variáveis quantitativas foram apresentadas média, desvio-padrão, mediana, primeiro quartil, terceiro quartil, valor mínimo e valor máximo.
+
+```{r}
+dados_tab <- dados %>%
+  select(
+    -numero_apolice,
+    -data_emissao_apolice,
+    -data_incidente,
+    -cep_segurado,
+    -local_incidente,
+    -modelo_veiculo
+  )
+```
+
+Para as variáveis qualitativas foram apresentadas frequências absolutas e relativas.
+
+```{r}
+tabela1 <- dados_tab %>%
+  tbl_summary(
+    by = severidade_incidente,
+    statistic = list(
+      all_continuous() ~
+        "{mean} ({sd})\nMediana: {median}\nQ1: {p25}\nQ3: {p75}\nMin-Max: {min}-{max}",
+      all_categorical() ~
+        "{n} ({p}%)"
+    ),
+    digits = all_continuous() ~ 2,
+    missing = "no"
+  ) %>%
+  add_overall(
+    last = FALSE,
+    col_label = "**Geral**"
+  ) %>%
+  add_p(
+    test = list(
+      all_continuous() ~ "kruskal.test",
+      all_categorical() ~ "chisq.test"
+    )
+  ) %>%
+  bold_labels()
+
+tabela1
+```
+
+# Discussão dos Resultados
+
+A análise comparativa segundo a severidade do incidente evidenciou diferenças estatisticamente significativas nas variáveis relacionadas aos valores das indenizações e à complexidade dos acidentes.
+
+Os maiores valores médios de reivindicação total, reivindicação veicular, reivindicação patrimonial e reivindicação por lesões foram observados nos grupos classificados como dano grave e perda total.
+
+Além disso, acidentes mais severos envolveram maior número de veículos, indicando maior complexidade dos eventos registrados.
+
+Em contrapartida, variáveis como ganhos de capital, perdas de capital e número de testemunhas não apresentaram diferenças estatisticamente significativas entre os grupos avaliados.
+
+De maneira geral, os resultados sugerem que a severidade do incidente está fortemente associada ao impacto financeiro das indenizações e à magnitude dos danos decorrentes dos acidentes.
+
+# Relações Potencialmente Relevantes
+
+Além da severidade dos incidentes, diversas outras relações podem ser exploradas na base de dados.
+
+Uma das possibilidades consiste em investigar a associação entre fraude reportada e características dos segurados, como idade, escolaridade, ocupação e tempo de relacionamento com a seguradora.
+
+Outra análise relevante envolve a relação entre as características dos acidentes e os valores das indenizações. Variáveis como tipo de colisão, quantidade de veículos envolvidos e presença de testemunhas podem exercer influência direta sobre os valores reivindicados.
+
+Também podem ser exploradas associações entre características dos veículos e a severidade dos acidentes, contribuindo para estudos de risco e precificação de apólices.
+
+Por fim, a base permite análises temporais relacionadas aos horários e datas dos incidentes, possibilitando a identificação de padrões sazonais e períodos de maior risco.
+
+# Análise Gráfica
+
+## Valor Total Reivindicado por Severidade do Incidente
+
+O gráfico a seguir apresenta a distribuição dos valores totais reivindicados segundo a severidade do incidente.
+
+```{r}
+ggplot(
+  dados,
+  aes(
+    x = severidade_incidente,
+    y = valor_total_reivindicado,
+    fill = severidade_incidente
+  )
+) +
+  geom_boxplot() +
+  labs(
+    title = "Valor Total Reivindicado por Severidade do Incidente",
+    x = "Severidade do Incidente",
+    y = "Valor Total Reivindicado"
+  ) +
+  theme_minimal()
+```
+
+Observa-se que os grupos classificados como dano grave e perda total tendem a apresentar maiores valores reivindicados quando comparados aos demais grupos.
+
+## Distribuição das Fraudes Reportadas
+
+O gráfico seguinte apresenta a frequência de registros classificados como fraude e não fraude.
+
+```{r}
+ggplot(
+  dados,
+  aes(x = fraude_reportada)
+) +
+  geom_bar(
+    fill = "skyblue",
+    width = 0.7
+  ) +
+  labs(
+    title = "Distribuição das Fraudes Reportadas",
+    subtitle = "Quantidade de registros por classificação",
+    x = "Fraude Reportada",
+    y = "Frequência"
+  ) +
+  theme_minimal()
+```
+
+## Correlação entre variaveis e como isso pode ser representado graficamente
+
+```{r}
+cor(
+  dados$idade,
+  dados$meses_como_cliente,
+  use = "complete.obs"
+)
+```
+
+## Representando graficamente como estão relacionados a idade X meses como cliente
+
+```{r}
+ggplot(
+  dados,
+  aes(
+    x = idade,
+    y = meses_como_cliente
+  )
+) +
+   geom_jitter( # usando jitter para melhor visualização dos pontos.
+    width = 0.3,
+    height = 0,
+    alpha = 0.5
+  )+
+  geom_smooth(method = "lm", se = TRUE, color = "red") +
+  labs(
+    title = "Correlação entre Idade x meses como cliente",
+    x = "Idade do segurado",
+    y = "Meses como cliente"
+  ) +
+  theme_minimal()
+```
+
+Embora clientes mais velhos aparentem permanecer por mais tempo na seguradora, esse gráfico, por si só, não permite concluir se eles possuem maior ou menor probabilidade de solicitar uma reivindicação de seguro.
+
+## Observando a idade através da severidade dos incidentes
+
+```{r}
+ggplot(
+  dados,
+  aes(
+    x = severidade_incidente,
+    y = idade,
+    fill = severidade_incidente
+  )
+) +
+  geom_violin(alpha = 0.7) +
+  geom_boxplot(width = 0.1, fill = "white") +
+  theme_minimal()
+```
+Iremos verificar a média de idade por severidade do incidente.
+```{r}
+
+idade_media <- dados %>%
+  group_by(severidade_incidente) %>%
+  summarise(
+    idade_media = mean(idade, na.rm = TRUE)
+  )
+
+idade_media
+
+```
+
+A análise da média de idade associada a cada nível de severidade dos acidentes é relevante para a seguradora, pois permite identificar padrões etários relacionados à gravidade dos sinistros. Esses resultados podem contribuir para a construção de modelos de precificação mais precisos, nos quais a idade do segurado é considerada como um dos fatores de risco. Dessa forma, faixas etárias com maior associação a acidentes de maior severidade podem ser incorporadas como variáveis na definição do prêmio do seguro, refletindo de maneira mais adequada o risco individual de cada cliente.
+
+## Relação entre Reivindicação Veicular e Valor Total Reivindicado
+
+O gráfico de dispersão abaixo apresenta a relação entre o valor reivindicado para o veículo e o valor total reivindicado, considerando a severidade do incidente.
+
+```{r}
+ggplot(
+  dados,
+  aes(
+    x = reivindicacao_veiculo,
+    y = valor_total_reivindicado,
+    color = severidade_incidente,
+  )
+) +
+  geom_point(alpha = 0.7) +
+  labs(
+    title = "Reivindicação do Veículo e Valor Total Reivindicado",
+    x = "Reivindicação do Veículo",
+    y = "Valor Total Reivindicado",
+    color = "Severidade"
+  ) +
+  theme_minimal()
+```
+
+Observa-se uma associação positiva entre os valores reivindicados para veículos e o valor total das indenizações, indicando que danos veiculares mais elevados tendem a resultar em maiores custos totais.
+
+# Conclusão
+
+A partir da análise exploratória realizada, foi possível identificar características importantes da base de dados e compreender como diferentes variáveis se relacionam com a severidade dos incidentes. As análises indicaram que sinistros mais graves tendem a estar associados a maiores valores de indenização e a acidentes de maior complexidade.
+
+Os procedimentos adotados, incluindo medidas descritivas, testes de hipóteses e análise gráfica, permitiram extrair informações relevantes e fornecer evidências sobre os fatores relacionados aos eventos analisados. Além disso, foram identificadas diversas possibilidades para estudos futuros, como modelagem estatística, classificação de riscos e detecção de fraudes.
+
+Conclui-se que a utilização de técnicas estatísticas na análise de dados de seguros é essencial para transformar grandes volumes de dados em informações úteis, contribuindo para decisões mais assertivas e para uma gestão mais eficiente dos riscos seguráveis.
+
+::: {.callout-important}
+
+## Conecte-se comigo
+
+Para mais informações sobre minha experiência profissional, publicações e projetos, visite meu perfil no LinkedIn:
+
+**LinkedIn:** <https://www.linkedin.com/in/antoniovictorsf/>
+
